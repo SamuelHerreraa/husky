@@ -1,3 +1,20 @@
+# entornos
+venv/
+.env
+
+# credenciales de firebase
+firebase_credentials.json
+
+# __pycache__
 __pycache__/
 *.pyc
-.env
+*.pyo
+*.pyd
+
+# cosas de VSCode
+.vscode/
+
+# build de pyinstaller (si lo usas)
+dist/
+build/
+*.spec

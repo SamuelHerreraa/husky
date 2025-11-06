@@ -1,0 +1,4 @@
+pyrebase4
+firebase-admin
+ttkbootstrap
+requests
