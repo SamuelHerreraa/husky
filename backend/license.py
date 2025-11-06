@@ -17,7 +17,7 @@ def check_license(user_email: str, uid: str):
     doc = doc_ref.get()
 
     if not doc.exists:
-        raise ValueError("No hay licencia activa para este usuario.")
+        raise ValueError("There is no active license for this user.")
 
     data = doc.to_dict() or {}
     status = data.get("status", "inactive")
@@ -27,7 +27,7 @@ def check_license(user_email: str, uid: str):
     if not exp_field:
         # no hay fecha -> solo marcamos inactivo
         doc_ref.update({"status": "inactive"})
-        raise ValueError("No hay licencia activa para este usuario.")
+        raise ValueError("There is no active license for this user.")
 
     # ---- normalizar fecha ----
     if isinstance(exp_field, str):
@@ -54,11 +54,11 @@ def check_license(user_email: str, uid: str):
     if now >= exp_date:
         # SOLO cambiamos status, NO tocamos device_id
         doc_ref.update({"status": "inactive"})
-        raise ValueError("No hay licencia activa para este usuario.")
+        raise ValueError("There is no active license for this user.")
 
     # ---- revisar status manual ----
     if status != "active":
-        raise ValueError("No hay licencia activa para este usuario.")
+        raise ValueError("There is no active license for this user.")
 
     # ---- revisar device ----
     if device_id_doc == DEVICE_ID:
@@ -66,7 +66,7 @@ def check_license(user_email: str, uid: str):
         return {"valid": True, "exp_date": exp_date}
     elif device_id_doc != "" and device_id_doc != DEVICE_ID:
         # ya está usado en otra PC
-        raise ValueError("No hay licencia activa para este usuario.")
+        raise ValueError("There is no active license for this user.")
     else:
         # estaba vacío -> lo ocupamos
         doc_ref.update({"device_id": DEVICE_ID})
