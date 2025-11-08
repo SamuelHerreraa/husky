@@ -8,66 +8,72 @@ from .utils import parse_expiration_date
 def check_license(user_email: str, uid: str):
     """
     Valida la licencia del usuario en Firestore.
-    - Si viene expiration_date como string, la migra a Timestamp.
-    - Si está expirada, marca status='inactive' PERO NO toca device_id.
-    - Valida que status sea 'active'.
-    - Valida que el device_id sea el mismo o esté vacío.
+
+    Nuevo comportamiento:
+    - Si está expirada, el usuario pasa a estado "pending",
+      se borra expiration_date y se libera el device_id.
+    - Así queda como un usuario nuevo sin licencia.
     """
     doc_ref = db.collection('users').document(user_email)
     doc = doc_ref.get()
 
     if not doc.exists:
-        raise ValueError("There is no active license for this user.")
+        # no hay doc → no hay licencia
+        raise ValueError("No license. Please contact the admin.")
 
     data = doc.to_dict() or {}
-    status = data.get("status", "inactive")
+    status = data.get("status", "pending")
     exp_field = data.get("expiration_date")
     device_id_doc = data.get("device_id", "")
 
     if not exp_field:
-        # no hay fecha -> solo marcamos inactivo
-        doc_ref.update({"status": "inactive"})
-        raise ValueError("There is no active license for this user.")
+        # no tiene fecha, lo tratamos como sin licencia
+        # nos aseguramos de que quede pending y sin device
+        doc_ref.update({
+            "status": "pending",
+            "device_id": "",
+            "expiration_date": firestore.DELETE_FIELD
+        })
+        raise ValueError("No license. Please contact the admin.")
 
-    # ---- normalizar fecha ----
+    # normalizar fecha
     if isinstance(exp_field, str):
-        # string viejo -> lo convertimos y la guardamos como Timestamp
-        exp_date = parse_expiration_date(exp_field)  # ya viene en UTC
+        exp_date = parse_expiration_date(exp_field)  # ya regresa en UTC
         exp_ts = firestore.Timestamp.from_datetime(exp_date)
-        # ojo: SOLO actualizamos expiration_date
         doc_ref.update({"expiration_date": exp_ts})
     else:
-        # Timestamp o datetime
         if hasattr(exp_field, "to_datetime"):
             exp_date = exp_field.to_datetime()
         else:
             exp_date = exp_field
 
-        # asegurar tz
         if exp_date.tzinfo is None:
             exp_date = exp_date.replace(tzinfo=timezone.utc)
         else:
             exp_date = exp_date.astimezone(timezone.utc)
 
-    # ---- revisar expiración ----
     now = datetime.now(timezone.utc)
+
+    # ⬇️ aquí está el cambio importante
     if now >= exp_date:
-        # SOLO cambiamos status, NO tocamos device_id
-        doc_ref.update({"status": "inactive"})
-        raise ValueError("There is no active license for this user.")
+        # licencia vencida → lo regresamos a "pending" y limpiamos
+        doc_ref.update({
+            "status": "pending",
+            "device_id": "",
+            "expiration_date": firestore.DELETE_FIELD
+        })
+        raise ValueError("License expired. Please contact the admin.")
 
-    # ---- revisar status manual ----
+    # si la fecha está bien pero el status no es active, lo bloqueamos
     if status != "active":
-        raise ValueError("There is no active license for this user.")
+        raise ValueError("No license. Please contact the admin.")
 
-    # ---- revisar device ----
+    # validar device
     if device_id_doc == DEVICE_ID:
-        # ok
         return {"valid": True, "exp_date": exp_date}
     elif device_id_doc != "" and device_id_doc != DEVICE_ID:
-        # ya está usado en otra PC
-        raise ValueError("There is no active license for this user.")
+        raise ValueError("This license is already in use on another computer.")
     else:
-        # estaba vacío -> lo ocupamos
+        # estaba libre → lo reclamamos
         doc_ref.update({"device_id": DEVICE_ID})
         return {"valid": True, "exp_date": exp_date}

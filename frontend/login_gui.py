@@ -38,6 +38,7 @@ class LoginWindow:
             base_path = "."
         self.config_path = os.path.join(base_path, "login_data.json")
 
+        # Carga de datos guardados (saved_email, remember_email)
         self.load_saved_data()
 
         # ----- contenedor principal -----
@@ -48,9 +49,6 @@ class LoginWindow:
         tb.Label(container, text="Email:", style="Navy.TLabel", anchor=W).pack(fill=X, pady=(0, 5))
         self.email_entry = tb.Entry(container, width=30)
         self.email_entry.pack(fill=X, pady=(0, 8))
-        self.email_entry.focus()
-        if self.saved_email:
-            self.email_entry.insert(0, self.saved_email)
 
         # Password
         tb.Label(container, text="Password:", style="Navy.TLabel", anchor=W).pack(fill=X, pady=(0, 5))
@@ -66,6 +64,19 @@ class LoginWindow:
             variable=self.remember_email_var,
             bootstyle="round-toggle",
         ).pack(anchor=W, pady=(0, 10))
+
+        # Lógica de autocompletar + foco inicial
+        if self.saved_email and self.remember_email:
+            # Recordaba el email → lo rellenamos y mandamos el foco al password
+            self.email_entry.insert(0, self.saved_email)
+            self.pass_entry.focus_set()
+        else:
+            # No recuerda email o no hay guardado → foco al email
+            if self.saved_email:
+                # Si por alguna razón hay email guardado pero remember_email=False, lo puedes usar o no.
+                # Aquí lo rellenamos, pero dejamos foco en email para edición.
+                self.email_entry.insert(0, self.saved_email)
+            self.email_entry.focus_set()
 
         # Botón
         tb.Button(

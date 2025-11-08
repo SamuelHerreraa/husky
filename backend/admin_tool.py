@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox
 from datetime import datetime, timezone, timedelta
 from backend.firebase_config import db
 from backend.utils import parse_expiration_date
-from firebase_admin import auth
+from firebase_admin import auth, firestore
 
 
 def _normalize_expiration(value):
@@ -41,21 +41,49 @@ class AdminTool:
         main_frame = tk.Frame(root, bg='#f5f5f5')
         main_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
 
-        title_label = tk.Label(main_frame, text="User Licenses Overview",
-                               font=('Arial', 12, 'bold'), bg='#f5f5f5', fg='#333')
+        title_label = tk.Label(
+            main_frame,
+            text="User Licenses Overview",
+            font=('Arial', 12, 'bold'),
+            bg='#f5f5f5',
+            fg='#333'
+        )
         title_label.pack(pady=(0, 10))
 
         button_frame = tk.Frame(main_frame, bg='#f5f5f5')
         button_frame.pack(fill=tk.X, pady=(0, 15))
-        tk.Button(button_frame, text="🔄 Refresh List", command=self.refresh_users,
-                  bg='#4CAF50', fg='white', font=('Arial', 9, 'bold'),
-                  relief='flat', padx=25, pady=6).pack(side=tk.LEFT)
-        tk.Button(button_frame, text="❌ Close", command=root.quit,
-                  bg='#f44336', fg='white', font=('Arial', 9, 'bold'),
-                  relief='flat', padx=25, pady=6).pack(side=tk.RIGHT)
+        tk.Button(
+            button_frame,
+            text="🔄 Refresh List",
+            command=self.refresh_users,
+            bg='#4CAF50',
+            fg='white',
+            font=('Arial', 9, 'bold'),
+            relief='flat',
+            padx=25,
+            pady=6
+        ).pack(side=tk.LEFT)
+        tk.Button(
+            button_frame,
+            text="❌ Close",
+            command=root.quit,
+            bg='#f44336',
+            fg='white',
+            font=('Arial', 9, 'bold'),
+            relief='flat',
+            padx=25,
+            pady=6
+        ).pack(side=tk.RIGHT)
 
-        table_frame = tk.LabelFrame(main_frame, text="Users", font=('Arial', 9, 'bold'),
-                                    bg='#f5f5f5', fg='#666', padx=5, pady=5)
+        table_frame = tk.LabelFrame(
+            main_frame,
+            text="Users",
+            font=('Arial', 9, 'bold'),
+            bg='#f5f5f5',
+            fg='#666',
+            padx=5,
+            pady=5
+        )
         table_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
         columns = ("Email", "Status", "Days Left", "Expiration")
@@ -71,35 +99,60 @@ class AdminTool:
 
         self.tree.bind("<<TreeviewSelect>>", self.on_user_select)
 
-        action_frame = tk.LabelFrame(main_frame, text="Manage Selected User",
-                                     font=('Arial', 9, 'bold'), bg='#f5f5f5', fg='#666',
-                                     padx=10, pady=10)
+        action_frame = tk.LabelFrame(
+            main_frame,
+            text="Manage Selected User",
+            font=('Arial', 9, 'bold'),
+            bg='#f5f5f5',
+            fg='#666',
+            padx=10,
+            pady=10
+        )
         action_frame.pack(fill=tk.X, pady=(0, 10))
 
-        self.selected_label = tk.Label(action_frame,
-                                       text="No user selected\n(Click a row to manage)",
-                                       font=('Arial', 10, 'bold'),
-                                       bg='#f5f5f5', fg='#666',
-                                       justify='center')
+        self.selected_label = tk.Label(
+            action_frame,
+            text="No user selected\n(Click a row to manage)",
+            font=('Arial', 10, 'bold'),
+            bg='#f5f5f5',
+            fg='#666',
+            justify='center'
+        )
         self.selected_label.pack(pady=8)
 
         days_row = tk.Frame(action_frame, bg='#f5f5f5')
         days_row.pack(pady=5)
-        tk.Label(days_row, text="Add days:", bg='#f5f5f5', font=('Arial', 9), fg='#333')\
-            .grid(row=0, column=0, padx=(0, 10), sticky='w')
+        tk.Label(
+            days_row,
+            text="Add days:",
+            bg='#f5f5f5',
+            font=('Arial', 9),
+            fg='#333'
+        ).grid(row=0, column=0, padx=(0, 10), sticky='w')
 
         self.days_var = tk.StringVar(value="7")
-        days_combo = ttk.Combobox(days_row, textvariable=self.days_var,
-                                  values=["1", "3", "7", "15", "30"],
-                                  state="readonly", width=8, font=('Arial', 9))
+        days_combo = ttk.Combobox(
+            days_row,
+            textvariable=self.days_var,
+            values=["1", "3", "7", "15", "30"],
+            state="readonly",
+            width=8,
+            font=('Arial', 9)
+        )
         days_combo.grid(row=0, column=1, padx=(0, 20), sticky='w')
 
-        self.apply_btn = tk.Button(action_frame, text="✅ Apply Days",
-                                   command=self.apply_days,
-                                   bg='#2196F3', fg='white', font=('Arial', 9, 'bold'),
-                                   relief='flat', padx=30, pady=6)
+        self.apply_btn = tk.Button(
+            action_frame,
+            text="✅ Apply Days",
+            command=self.apply_days,
+            bg='#2196F3',
+            fg='white',
+            font=('Arial', 9, 'bold'),
+            relief='flat',
+            padx=30,
+            pady=6
+        )
         self.apply_btn.pack(pady=10)
-
         self.apply_btn.bind("<Enter>", lambda e: self.apply_btn.config(bg='#1976D2'))
         self.apply_btn.bind("<Leave>", lambda e: self.apply_btn.config(bg='#2196F3'))
 
@@ -126,35 +179,39 @@ class AdminTool:
                 doc = doc_ref.get()
                 data = doc.to_dict() if doc.exists else None
 
-                status = data.get('status', 'pending') if data else 'pending'
-                exp_field = data.get('expiration_date') if data else None
-
-                if exp_field and status != 'pending':
-                    try:
-                        exp_date = _normalize_expiration(exp_field)
-
-                        # si ya venció, de una vez marcamos inactive en la base
-                        if now >= exp_date and status != "inactive":
-                            doc_ref.update({"status": "inactive"})
-                            status_display = "🔴 Inactive"
-                            days_left = 0
-                            exp_formatted = exp_date.strftime("%m/%d %H:%M")
-                        else:
-                            days_left = max(0, (exp_date - now).days)
-                            exp_formatted = exp_date.strftime("%m/%d %H:%M")
-                            status_display = "🟢 Active"
-                    except Exception:
-                        days_left = "Error"
-                        exp_formatted = "Invalid"
-                        status_display = "🔴 Error"
-                elif status == 'pending':
+                if not data:
+                    status_display = "🟡 Pending"
                     days_left = "No License"
                     exp_formatted = "N/A"
-                    status_display = "🟡 Pending"
                 else:
-                    days_left = "No date"
-                    exp_formatted = "N/A"
-                    status_display = "🔴 Inactive"
+                    status = data.get("status", "pending")
+                    exp_field = data.get("expiration_date")
+
+                    if exp_field and status != "pending":
+                        try:
+                            exp_date = _normalize_expiration(exp_field)
+                            if now >= exp_date:
+                                # vencido → reset
+                                doc_ref.update({
+                                    "status": "pending",
+                                    "expiration_date": firestore.DELETE_FIELD,
+                                    "device_id": ""
+                                })
+                                status_display = "🟡 Pending"
+                                days_left = "No License"
+                                exp_formatted = "N/A"
+                            else:
+                                days_left = max(0, (exp_date - now).days)
+                                exp_formatted = exp_date.strftime("%m/%d %H:%M")
+                                status_display = "🟢 Active"
+                        except Exception:
+                            status_display = "🔴 Error"
+                            days_left = "Error"
+                            exp_formatted = "Invalid"
+                    else:
+                        status_display = "🟡 Pending"
+                        days_left = "No License"
+                        exp_formatted = "N/A"
 
                 self.tree.insert(
                     "",
@@ -212,12 +269,12 @@ class AdminTool:
         doc = doc_ref.get()
         now_utc = datetime.now(timezone.utc)
 
-        if not doc.exists:
+        if not doc.exists:  # ← aquí estaba el error
             new_exp_date = now_utc + timedelta(days=days_to_add)
             doc_ref.set({
                 "status": "active",
                 "expiration_date": new_exp_date,
-                "device_id": ""  # primer uso
+                "device_id": ""
             })
             messagebox.showinfo("Success", f"User {email} activated with {days_to_add} days.")
             return
@@ -231,7 +288,6 @@ class AdminTool:
             current_exp = _normalize_expiration(exp_field)
             new_exp_date = current_exp + timedelta(days=days_to_add)
 
-        # aquí SÍ preservamos device_id porque hacemos update
         doc_ref.update({
             "status": "active",
             "expiration_date": new_exp_date
